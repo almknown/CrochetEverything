@@ -1,0 +1,52 @@
+# NGine Stack Rules & Conventions
+
+You are working on a project built with the **NGine** stack. Follow these rules strictly to maintain "vibe coding" speed and quality.
+
+## 🛠️ Tech Stack
+- **Framework**: Next.js 14+ (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS (v4) + Shadcn/ui
+- **Auth**: Clerk
+- **Database**: Neon (PostgreSQL) + Drizzle ORM
+- **Payments**: Stripe / Lemon Squeezy
+
+## 🧠 Coding Principles
+
+### 1. Component Strategy
+- **Default to Server Components**: only use `'use client'` when you need interactivity (state, hooks, event listeners).
+- **Shadcn/ui First**: Always check `src/components/ui` for existing components before building custom ones.
+- **Server Actions**: Use Server Actions for data mutations (form submissions, etc.). Do not build API routes `/app/api/...` for simple mutations.
+
+### 2. Database Access (Drizzle)
+- **Import**: `import { db } from '@/lib/db';`
+- **Schema**: `import { users, subscriptions } from '@/lib/db/schema';`
+- **Lazy Loading**: The DB connection is lazy-loaded. Use it freely in Server Components and Server Actions.
+- **Queries**: Prefer Drizzle's query builder (e.g., `db.query.users.findFirst(...)`).
+
+### 3. Authentication (Clerk)
+- **Server-Side**: `import { currentUser } from '@clerk/nextjs/server';`
+- **Client-Side**: `import { useUser } from '@clerk/nextjs';`
+- **Middleware**: Routes are protected in `src/middleware.ts`. Check this file if you get 401s on new routes.
+
+### 4. Url Handling
+- Always use the helper: `import { getAppUrl } from '@/lib/config/url';`
+- `getAppUrl()` automatically handles Localhost vs. Vercel Preview vs. Production.
+
+### 5. Webhooks & Payments
+- Webhooks live in `src/app/api/webhooks/`.
+- Do not put payment logic in client components. Always verify on server.
+
+## 🚀 "Vibe Coding" Style
+- **Ship Fast**: If a Shadcn component does 90% of the job, use it. Don't reinvent the wheel.
+- **Modern Syntax**: Use `async/await` everywhere. Avoid `.then()`.
+- **Type Safety**: No `any`. Use Zod for validation (available in `@/lib/validators`).
+
+## ⚠️ Common Pitfalls
+- **Build Errors**: If adding new env vars, update `.env.example`.
+- **Hydration Errors**: Ensure HTML structure is valid (e.g., no `div` inside `p`).
+- **Edge Runtime**: If using edge functions, ensure DB driver is `@neondatabase/serverless`.
+
+## 📂 Key Directories
+- `src/lib/db/schema.ts` → Your database source of truth.
+- `src/app/layout.tsx` → Global providers (Clerk, Toaster).
+- `src/app/api/webhooks` → Payment event handlers.
