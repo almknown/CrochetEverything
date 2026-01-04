@@ -3,45 +3,43 @@
 /**
  * PatternViewer Component
  * 3D visualization of crochet patterns using Three.js
+ * Supports both flat MeshData and 3D AmigurumiMeshData
  */
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { MeshData } from '@/lib/three/MeshGenerator';
+import { AmigurumiMeshData, PartMeshData } from '@/lib/three/AmigurumiMeshGenerator';
+
+// Type guard to check if mesh is AmigurumiMeshData
+function isAmigurumiMesh(mesh: MeshData | AmigurumiMeshData): mesh is AmigurumiMeshData {
+    return 'parts' in mesh && Array.isArray((mesh as AmigurumiMeshData).parts);
+}
 
 interface PatternViewerProps {
-    meshData: MeshData;
+    meshData: MeshData | AmigurumiMeshData;
     className?: string;
     autoRotate?: boolean;
     showGrid?: boolean;
 }
 
 /**
- * Inner mesh component that renders the pattern
+ * Inner mesh component that renders a flat pattern
  */
-function PatternMesh({ meshData, autoRotate }: { meshData: MeshData; autoRotate: boolean }) {
+function FlatPatternMesh({ meshData, autoRotate }: { meshData: MeshData; autoRotate: boolean }) {
     const meshRef = useRef<THREE.Mesh>(null);
 
-    // Create geometry from mesh data
-    const geometry = new THREE.BufferGeometry();
+    const geometry = useMemo(() => {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(meshData.vertices, 3));
+        geo.setIndex(meshData.indices);
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(meshData.colors, 3));
+        geo.computeVertexNormals();
+        return geo;
+    }, [meshData]);
 
-    geometry.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(meshData.vertices, 3)
-    );
-
-    geometry.setIndex(meshData.indices);
-
-    geometry.setAttribute(
-        'color',
-        new THREE.Float32BufferAttribute(meshData.colors, 3)
-    );
-
-    geometry.computeVertexNormals();
-
-    // Auto-rotate animation
     useFrame((state, delta) => {
         if (autoRotate && meshRef.current) {
             meshRef.current.rotation.z += delta * 0.2;
@@ -50,28 +48,78 @@ function PatternMesh({ meshData, autoRotate }: { meshData: MeshData; autoRotate:
 
     return (
         <mesh ref={meshRef} geometry={geometry}>
-            <meshStandardMaterial
-                vertexColors
-                side={THREE.DoubleSide}
-                flatShading
-            />
+            <meshStandardMaterial vertexColors side={THREE.DoubleSide} flatShading />
         </mesh>
     );
 }
 
 /**
+ * Inner component that renders amigurumi parts with yarn-level detail
+ */
+function AmigurumiMesh({ meshData, autoRotate }: { meshData: AmigurumiMeshData; autoRotate: boolean }) {
+    const groupRef = useRef<THREE.Group>(null);
+
+    useFrame((state, delta) => {
+        if (autoRotate && groupRef.current) {
+            groupRef.current.rotation.y += delta * 0.3;
+        }
+    });
+
+    return (
+        <group ref={groupRef}>
+            {meshData.parts.map((part, index) => (
+                <PartMesh key={`${part.name}-${index}`} part={part} />
+            ))}
+        </group>
+    );
+}
+
+/**
+ * Renders a single amigurumi part
+ */
+function PartMesh({ part }: { part: PartMeshData }) {
+    const geometry = useMemo(() => {
+        const geo = new THREE.BufferGeometry();
+        if (part.vertices.length > 0) {
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(part.vertices, 3));
+            if (part.indices.length > 0) {
+                geo.setIndex(part.indices);
+            }
+            if (part.colors.length > 0) {
+                geo.setAttribute('color', new THREE.Float32BufferAttribute(part.colors, 3));
+            }
+            geo.computeVertexNormals();
+        }
+        return geo;
+    }, [part]);
+
+    return (
+        <mesh geometry={geometry}>
+            <meshStandardMaterial
+                vertexColors={part.colors.length > 0}
+                side={THREE.DoubleSide}
+                flatShading
+                color={part.colors.length === 0 ? '#F5DEB3' : undefined}
+            />
+        </mesh>
+    );
+}
+
+
+/**
  * Camera controller that adjusts based on mesh bounds
  */
-function CameraController({ bounds }: { bounds: MeshData['bounds'] }) {
+function CameraController({ bounds }: { bounds: MeshData['bounds'] | AmigurumiMeshData['bounds'] }) {
     const { camera } = useThree();
 
     useEffect(() => {
         const maxDim = Math.max(
             bounds.maxX - bounds.minX,
-            bounds.maxY - bounds.minY
+            bounds.maxY - bounds.minY,
+            bounds.maxZ - bounds.minZ
         );
-        const cameraDistance = maxDim * 1.5;
-        camera.position.set(0, 0, cameraDistance);
+        const cameraDistance = Math.max(15, maxDim * 2);
+        camera.position.set(cameraDistance * 0.5, cameraDistance * 0.3, cameraDistance);
         camera.lookAt(0, 0, 0);
     }, [bounds, camera]);
 
@@ -88,6 +136,7 @@ export function PatternViewer({
     showGrid = true,
 }: PatternViewerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const isAmigurumi = isAmigurumiMesh(meshData);
 
     return (
         <div
@@ -103,8 +152,12 @@ export function PatternViewer({
                 <directionalLight position={[5, 5, 5]} intensity={1} />
                 <directionalLight position={[-5, -5, 5]} intensity={0.3} />
 
-                {/* Pattern mesh */}
-                <PatternMesh meshData={meshData} autoRotate={autoRotate} />
+                {/* Render appropriate mesh based on type */}
+                {isAmigurumi ? (
+                    <AmigurumiMesh meshData={meshData} autoRotate={autoRotate} />
+                ) : (
+                    <FlatPatternMesh meshData={meshData} autoRotate={autoRotate} />
+                )}
 
                 {/* Grid helper */}
                 {showGrid && (

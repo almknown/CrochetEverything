@@ -7,6 +7,7 @@ export * from './stitch-constants';
 export * from './shape-calculators';
 export * from './pattern-validator';
 export * from './pattern-generator';
+export * from './mesh-to-pattern';
 
 import { calculateShape, ShapeSpec, CalculatedPattern } from './shape-calculators';
 import { validatePattern, validatePatternSpec, ValidationResult } from './pattern-validator';

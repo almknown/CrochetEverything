@@ -6,6 +6,7 @@
 export * from './gemini-client';
 export * from './prompt-templates';
 export * from './guardrails';
+export * from './amigurumi-prompts';
 
 import { generatePatternSpec, AIPatternSpec } from './gemini-client';
 import { validateInput, validateOutput, applyDefaults, InputValidationResult, OutputValidationResult } from './guardrails';

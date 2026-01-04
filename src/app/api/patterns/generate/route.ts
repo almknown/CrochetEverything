@@ -2,14 +2,15 @@
  * Pattern Generation API
  * POST /api/patterns/generate
  * Generates a crochet pattern from a user prompt
+ * Supports both flat patterns and 3D amigurumi
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { generatePatternFromPrompt, generatePatternDirect } from '@/lib/ai';
+import { generatePatternFromPrompt, generatePatternDirect, generateAmigurumiSpec } from '@/lib/ai';
 import { generateMeshFromPattern, serializeMeshData } from '@/lib/three/MeshGenerator';
-import { db } from '@/lib/db';
-import { patterns } from '@/lib/db/schema';
+import { generateAmigurumiMesh, serializeAmigurumiMesh } from '@/lib/three/AmigurumiMeshGenerator';
+import { translateMeshToPattern, formatPatternForUI } from '@/lib/crochet/mesh-to-pattern';
 
 export async function POST(request: NextRequest) {
     try {
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { prompt, directSpec } = body;
+        const { prompt, directSpec, mode = 'flat' } = body;
 
         // Validate input
         if (!prompt && !directSpec) {
@@ -33,6 +34,53 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // ============================================
+        // AMIGURUMI MODE - 3D stuffed toys
+        // ============================================
+        if (mode === 'amigurumi') {
+            if (!prompt) {
+                return NextResponse.json(
+                    { error: 'Prompt is required for amigurumi mode' },
+                    { status: 400 }
+                );
+            }
+
+            // Generate amigurumi spec from AI
+            const amigurumiSpec = await generateAmigurumiSpec(prompt);
+
+            // Generate 3D mesh with yarn-level detail
+            const meshData = generateAmigurumiMesh(amigurumiSpec);
+
+            // Translate mesh to pattern instructions
+            const patternData = translateMeshToPattern(amigurumiSpec, meshData);
+            const formatted = formatPatternForUI(patternData);
+
+            // Return amigurumi response with full instructions
+            return NextResponse.json({
+                success: true,
+                mode: 'amigurumi',
+                pattern: {
+                    title: amigurumiSpec.name,
+                    description: amigurumiSpec.description,
+                    prompt,
+                    shapeType: 'amigurumi',
+                    difficulty: amigurumiSpec.difficulty,
+                    estimatedTime: amigurumiSpec.estimatedTime,
+                },
+                amigurumiSpec,
+                meshData,
+                serializedMesh: serializeAmigurumiMesh(meshData),
+                parts: amigurumiSpec.parts,
+                assembly: amigurumiSpec.assembly,
+                materials: amigurumiSpec.materials,
+                formatted,
+                patternData,
+            });
+        }
+
+        // ============================================
+        // FLAT MODE - 2D patterns (original behavior)
+        // ============================================
         let result;
 
         if (directSpec) {
@@ -73,7 +121,7 @@ export async function POST(request: NextRequest) {
             result.aiSpec?.colors
         );
 
-        // Prepare response data (don't save to DB yet - that's a separate action)
+        // Prepare response data
         const patternData = {
             title: result.aiSpec!.title,
             description: result.aiSpec!.description,
@@ -92,6 +140,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
+            mode: 'flat',
             pattern: patternData,
             calculated: result.patternResult!.pattern,
             formatted: result.patternResult!.formatted,
