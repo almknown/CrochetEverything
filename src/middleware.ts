@@ -2,9 +2,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
-    '/dashboard(.*)',
-    '/settings(.*)',
-    '/api/user(.*)',
+    '/generate(.*)',
+    '/my-patterns(.*)',
+    '/api/patterns(.*)',  // Pattern API requires auth (except GET on public)
 ]);
 
 // Define public routes that should bypass auth
@@ -13,6 +13,8 @@ const isPublicRoute = createRouteMatcher([
     '/sign-in(.*)',
     '/sign-up(.*)',
     '/api/webhooks(.*)',
+    '/gallery(.*)',
+    '/patterns/(.*)',  // Public pattern view
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

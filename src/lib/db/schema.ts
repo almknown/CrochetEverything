@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, pgEnum, integer } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ============================================
@@ -11,6 +11,20 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
     'past_due',
     'incomplete',
     'trialing',
+]);
+
+export const shapeTypeEnum = pgEnum('shape_type', [
+    'rectangle',
+    'circle',
+    'triangle',
+    'hexagon',
+    'oval',
+]);
+
+export const patternStatusEnum = pgEnum('pattern_status', [
+    'draft',
+    'published',
+    'private',
 ]);
 
 // ============================================
@@ -48,16 +62,48 @@ export const subscriptions = pgTable('subscriptions', {
 });
 
 // ============================================
+// PATTERNS TABLE
+// ============================================
+
+export const patterns = pgTable('patterns', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    prompt: text('prompt').notNull(), // Original user prompt
+    shapeType: shapeTypeEnum('shape_type').notNull(),
+    status: patternStatusEnum('status').default('draft'),
+    instructions: text('instructions').notNull(), // Generated pattern text (JSON)
+    meshData: text('mesh_data'), // JSON for 3D preview vertices/faces
+    thumbnailUrl: text('thumbnail_url'),
+    colors: text('colors'), // JSON array of hex colors
+    dimensions: text('dimensions'), // JSON { width, height, rows, stitchesPerRow }
+    likes: integer('likes').default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// ============================================
 // RELATIONS
 // ============================================
 
 export const usersRelations = relations(users, ({ many }) => ({
     subscriptions: many(subscriptions),
+    patterns: many(patterns),
 }));
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
     user: one(users, {
         fields: [subscriptions.userId],
+        references: [users.id],
+    }),
+}));
+
+export const patternsRelations = relations(patterns, ({ one }) => ({
+    user: one(users, {
+        fields: [patterns.userId],
         references: [users.id],
     }),
 }));
@@ -70,3 +116,5 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type NewSubscription = typeof subscriptions.$inferInsert;
+export type Pattern = typeof patterns.$inferSelect;
+export type NewPattern = typeof patterns.$inferInsert;
